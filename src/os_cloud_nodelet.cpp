@@ -120,15 +120,23 @@ class OusterCloud : public nodelet::Nodelet {
             }
 
             auto point_type = pnh.param("point_type", std::string{"original"});
+            auto min_valid_columns_in_scan = pnh.param("min_valid_columns_in_scan", 0);
             processors.push_back(
                 PointCloudProcessorFactory::create_point_cloud_processor(point_type,
                     info, tf_bcast.point_cloud_frame_id(),
                     tf_bcast.apply_lidar_to_sensor_transform(),
-                    [this](PointCloudProcessor_OutputType msgs) {
-                        for (size_t i = 0; i < msgs.size(); ++i) {
-                            if (msgs[i]->header.stamp > last_msg_ts)
-                                last_msg_ts = msgs[i]->header.stamp;
-                            lidar_pubs[i].publish(*msgs[i]);
+                    [this, min_valid_columns_in_scan](PointCloudProcessor_OutputType data) {
+                        if (data.num_valid_columns < min_valid_columns_in_scan) {
+                            ROS_WARN_STREAM(
+                                "Incomplete cloud, dropping it. Got "
+                                << data.num_valid_columns << " valid columns, expected "
+                                << min_valid_columns_in_scan << ".");
+                            return;
+                        }
+                        for (size_t i = 0; i < data.pc_msgs.size(); ++i) {
+                            if (data.pc_msgs[i]->header.stamp > last_msg_ts)
+                                last_msg_ts = data.pc_msgs[i]->header.stamp;
+                            lidar_pubs[i].publish(*data.pc_msgs[i]);
                         }
                     }
                 )
@@ -162,11 +170,11 @@ class OusterCloud : public nodelet::Nodelet {
 
             processors.push_back(LaserScanProcessor::create(
                 info, tf_bcast.lidar_frame_id(), scan_ring,
-                [this](LaserScanProcessor::OutputType msgs) {
-                    for (size_t i = 0; i < msgs.size(); ++i) {
-                        if (msgs[i]->header.stamp > last_msg_ts)
-                            last_msg_ts = msgs[i]->header.stamp;
-                        scan_pubs[i].publish(*msgs[i]);
+                [this](LaserScanProcessor::OutputType data) {
+                    for (size_t i = 0; i < data.scan_msgs.size(); ++i) {
+                        if (data.scan_msgs[i]->header.stamp > last_msg_ts)
+                            last_msg_ts = data.scan_msgs[i]->header.stamp;
+                        scan_pubs[i].publish(*data.scan_msgs[i]);
                     }
                 }));
         }

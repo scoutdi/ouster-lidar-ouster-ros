@@ -50,7 +50,7 @@ class OusterImage : public nodelet::Nodelet {
     }
 
     void create_publishers_subscribers(int n_returns) {
-        // TODO: avoid having to replicate the parameters: 
+        // TODO: avoid having to replicate the parameters:
         // timestamp_mode, ptp_utc_tai_offset, use_system_default_qos in yet
         // another node.
         auto& pnh = getPrivateNodeHandle();
@@ -84,11 +84,15 @@ class OusterImage : public nodelet::Nodelet {
                 nh.advertise<sensor_msgs::Image>(it->second, 100);
         }
 
+        auto min_valid_columns_in_scan = pnh.param("min_valid_columns_in_scan", 0);
         std::vector<LidarScanProcessor> processors {
             ImageProcessor::create(
                 info, "os_lidar", /*TODO: tf_bcast.point_cloud_frame_id()*/
-                [this](ImageProcessor::OutputType msgs) {
-                    for (auto it = msgs.begin(); it != msgs.end(); ++it) {
+                [this, min_valid_columns_in_scan](ImageProcessor::OutputType data) {
+                    if (data.num_valid_columns < min_valid_columns_in_scan)
+                        return;
+                    for (auto it = data.image_msgs.begin();
+                        it != data.image_msgs.end(); ++it) {
                         image_pubs[it->first].publish(*it->second);
                     }
                 })

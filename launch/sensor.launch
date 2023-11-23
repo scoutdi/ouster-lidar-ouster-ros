@@ -72,6 +72,16 @@
     xyzir
     }"/>
 
+  <arg name="min_valid_columns_in_scan" default="0"
+  doc="Each cloud is built up of an expected amount of udp packets.
+   If the driver start loosing packets from the lidar, the resulting pointcloud or image will be incomplete.
+   With this set to 0, the driver will publish all clouds regardless of how many valid
+   columns it is made up of.
+   If set to a positive integer, the driver will discard the entire
+   cloud if it does not consist of at least this many valid columns.
+   Number of expected columns is dependent on the lidar mode.
+   e.g. expected_columns=512 for lidar_mode=512x10"/>
+
   <group ns="$(arg ouster_ns)">
     <node pkg="nodelet" type="nodelet" name="os_nodelet_mgr"
       output="screen" required="true" args="manager"/>
@@ -111,6 +121,7 @@
     <arg name="proc_mask" value="$(arg proc_mask)"/>
     <arg name="scan_ring" value="$(arg scan_ring)"/>
     <arg name="point_type" value="$(arg point_type)"/>
+    <arg name="min_valid_columns_in_scan" value="$(arg min_valid_columns_in_scan)"/>
   </include>
 
 </launch>

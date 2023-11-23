@@ -57,6 +57,7 @@ class OusterDriver : public OusterSensor {
 
         auto timestamp_mode = pnh.param("timestamp_mode", std::string{});
         double ptp_utc_tai_offset = pnh.param("ptp_utc_tai_offset", -37.0);
+        auto min_valid_columns_in_scan = pnh.param("min_valid_columns_in_scan", 0);
 
         auto& nh = getNodeHandle();
 
@@ -81,8 +82,16 @@ class OusterDriver : public OusterSensor {
             processors.push_back(
                 PointCloudProcessorFactory::create_point_cloud_processor(point_type, info,
                     tf_bcast.point_cloud_frame_id(), tf_bcast.apply_lidar_to_sensor_transform(),
-                    [this](PointCloudProcessor_OutputType msgs) {
-                        for (size_t i = 0; i < msgs.size(); ++i) lidar_pubs[i].publish(*msgs[i]);
+                    [this, min_valid_columns_in_scan](PointCloudProcessor_OutputType data) {
+                        if (data.num_valid_columns < min_valid_columns_in_scan) {
+                            ROS_WARN_STREAM(
+                                "Incomplete cloud, dropping it. Got "
+                                << data.num_valid_columns << " valid columns, expected "
+                                << min_valid_columns_in_scan << ".");
+                            return;
+                        }
+                        for (size_t i = 0; i < data.pc_msgs.size(); ++i)
+                            lidar_pubs[i].publish(*data.pc_msgs[i]);
                     }
                 )
             );
@@ -115,9 +124,11 @@ class OusterDriver : public OusterSensor {
 
             processors.push_back(LaserScanProcessor::create(
                 info, tf_bcast.lidar_frame_id(), scan_ring,
-                [this](LaserScanProcessor::OutputType msgs) {
-                    for (size_t i = 0; i < msgs.size(); ++i) {
-                        scan_pubs[i].publish(*msgs[i]);
+                [this, min_valid_columns_in_scan](LaserScanProcessor::OutputType data) {
+                    if (data.num_valid_columns < min_valid_columns_in_scan)
+                        return;
+                    for (size_t i = 0; i < data.scan_msgs.size(); ++i) {
+                        scan_pubs[i].publish(*data.scan_msgs[i]);
                     }
                 }));
         }
@@ -149,8 +160,11 @@ class OusterDriver : public OusterSensor {
 
             processors.push_back(ImageProcessor::create(
                 info, tf_bcast.point_cloud_frame_id(),
-                [this](ImageProcessor::OutputType msgs) {
-                    for (auto it = msgs.begin(); it != msgs.end(); ++it) {
+                [this, min_valid_columns_in_scan](ImageProcessor::OutputType data) {
+                    if (data.num_valid_columns < min_valid_columns_in_scan)
+                        return;
+                    for (auto it = data.image_msgs.begin();
+                            it != data.image_msgs.end(); ++it) {
                         image_pubs[it->first].publish(*it->second);
                     }
                 }));
